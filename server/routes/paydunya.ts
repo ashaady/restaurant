@@ -1,38 +1,85 @@
 import { Request, Response } from "express";
+import { paymentsStore, ordersStore } from "./orders";
 
 /**
  * Initialize PayDunya payment
  * POST /api/paydunya/initialize
+ *
+ * Expects body:
+ * {
+ *   order_id: string,
+ *   payment_id: string,
+ *   total: number,
+ *   payment_method: "wave" | "orange-money",
+ *   order_number: string,
+ *   items: OrderItem[],
+ *   customer_name: string,
+ *   customer_phone: string,
+ *   order_type: "livraison" | "emporter"
+ * }
  */
 export async function handlePaydunya_Initialize(req: Request, res: Response) {
   try {
-    const { order_id, payment_method } = req.body;
+    const {
+      order_id,
+      payment_id,
+      total,
+      payment_method,
+      order_number,
+      items,
+      customer_name,
+      customer_phone,
+      order_type,
+    } = req.body;
 
-    if (!order_id || !payment_method) {
+    if (!order_id || !payment_id || !total || !payment_method) {
       return res.status(400).json({
         success: false,
         error: "Missing required fields",
       });
     }
 
-    // For demo purposes, we'll simulate success
-    const mockPaymentUrl = `https://paydunya.com/pay/${order_id}?token=demo_${Date.now()}`;
+    // Get the payment record to update
+    const payment = paymentsStore.get(payment_id);
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        error: "Payment record not found",
+      });
+    }
 
-    const paymentRecord = {
-      order_id,
-      payment_method,
-      transaction_id: `txn_${Date.now()}`,
-      paydunya_token: `token_${Date.now()}`,
-      payment_url: mockPaymentUrl,
-      status: "pending",
-      created_at: new Date().toISOString(),
+    // Generate PayDunya token
+    const paydunya_token = `token_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // Mock PayDunya API call (in production, this would call real PayDunya API)
+    // The payment_url would be returned from PayDunya API
+    const mockPaymentUrl = `https://paydunya.com/pay/${paydunya_token}`;
+
+    // Update payment record with PayDunya details
+    const updatedPayment = {
+      ...payment,
+      status: "processing",
+      paydunya_token,
+      paydunya_invoice_url: mockPaymentUrl,
     };
+
+    paymentsStore.set(payment_id, updatedPayment);
+    paymentsStore.set(
+      `payment-for-order-${order_id}`,
+      updatedPayment
+    );
+
+    // In production, you would:
+    // 1. Call actual PayDunya API to create invoice
+    // 2. Get the real payment URL from PayDunya
+    // 3. Store the real token in database
+    // 4. Configure webhook URL in PayDunya dashboard
 
     return res.json({
       success: true,
       payment_url: mockPaymentUrl,
-      token: paymentRecord.paydunya_token,
-      transaction_id: paymentRecord.transaction_id,
+      token: paydunya_token,
+      transaction_id: `txn_${Date.now()}`,
     });
   } catch (error) {
     console.error("PayDunya initialization error:", error);
