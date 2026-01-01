@@ -25,7 +25,7 @@ class ApiClient {
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
   ): Promise<{ data?: T; error?: ApiError }> {
     const url = `${this.baseUrl}${endpoint}`;
     const headers = {
@@ -67,7 +67,7 @@ class ApiClient {
 
   async post<T>(
     endpoint: string,
-    body: any
+    body: any,
   ): Promise<{ data?: T; error?: ApiError }> {
     return this.request<T>(endpoint, {
       method: "POST",
@@ -77,7 +77,7 @@ class ApiClient {
 
   async put<T>(
     endpoint: string,
-    body: any
+    body: any,
   ): Promise<{ data?: T; error?: ApiError }> {
     return this.request<T>(endpoint, {
       method: "PUT",
@@ -87,7 +87,7 @@ class ApiClient {
 
   async patch<T>(
     endpoint: string,
-    body: any
+    body: any,
   ): Promise<{ data?: T; error?: ApiError }> {
     return this.request<T>(endpoint, {
       method: "PATCH",

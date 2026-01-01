@@ -111,7 +111,7 @@ const statusConfig: Record<
 export default function OrderTracking() {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
-  
+
   const [order, setOrder] = useState<Order | null>(null);
   const [payment, setPayment] = useState<Payment | null>(null);
   const [loading, setLoading] = useState(true);
@@ -128,8 +128,9 @@ export default function OrderTracking() {
     const loadData = async () => {
       try {
         // Load order from API
-        const { data: orderData, error: orderError } = await orders.get(orderId);
-        
+        const { data: orderData, error: orderError } =
+          await orders.get(orderId);
+
         if (orderError || !orderData) {
           toast.error("Commande non trouvée");
           navigate("/orders");
@@ -140,7 +141,9 @@ export default function OrderTracking() {
 
         // Try to load payment for this order
         try {
-          const { data: paymentData } = await payments.get(`payment-for-order-${orderId}`);
+          const { data: paymentData } = await payments.get(
+            `payment-for-order-${orderId}`,
+          );
           if (paymentData) {
             setPayment(paymentData as any);
           }
@@ -184,7 +187,7 @@ export default function OrderTracking() {
                 payment.status !== "completed"
               ) {
                 toast.success(
-                  "✅ Paiement confirmé ! Votre commande est en cours de préparation"
+                  "✅ Paiement confirmé ! Votre commande est en cours de préparation",
                 );
                 // Refresh order status
                 const { data: updatedOrder } = await orders.get(orderId!);
@@ -226,13 +229,15 @@ export default function OrderTracking() {
 
     setVerifyingPayment(true);
     try {
-      const response = await fetch(`/api/paydunya/verify/${payment.paydunya_token}`);
+      const response = await fetch(
+        `/api/paydunya/verify/${payment.paydunya_token}`,
+      );
       const data = await response.json();
 
       if (data.success && data.data) {
         const paymentStatus = data.data.status;
         setPayment((prev) =>
-          prev ? { ...prev, status: paymentStatus } : null
+          prev ? { ...prev, status: paymentStatus } : null,
         );
 
         if (paymentStatus === "completed") {
@@ -275,8 +280,13 @@ export default function OrderTracking() {
     return (
       <Layout cartCount={0}>
         <div className="container mx-auto px-4 py-16 text-center">
-          <h1 className="text-2xl font-bold text-foreground">Commande non trouvée</h1>
-          <Link to="/orders" className="mt-4 inline-block text-primary font-semibold">
+          <h1 className="text-2xl font-bold text-foreground">
+            Commande non trouvée
+          </h1>
+          <Link
+            to="/orders"
+            className="mt-4 inline-block text-primary font-semibold"
+          >
             Retour aux commandes
           </Link>
         </div>
@@ -285,11 +295,22 @@ export default function OrderTracking() {
   }
 
   const currentStatusConfig = statusConfig[order.status];
-  const steps = order.order_type === "livraison"
-    ? ["pending", "confirmed", "preparing", "ready", "out_for_delivery", "delivered"]
-    : ["pending", "confirmed", "preparing", "ready"];
+  const steps =
+    order.order_type === "livraison"
+      ? [
+          "pending",
+          "confirmed",
+          "preparing",
+          "ready",
+          "out_for_delivery",
+          "delivered",
+        ]
+      : ["pending", "confirmed", "preparing", "ready"];
 
-  const subtotal = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const subtotal = order.items.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0,
+  );
   const deliveryFee = order.order_type === "livraison" ? 1000 : 0;
 
   // Check if payment is pending
@@ -337,10 +358,12 @@ export default function OrderTracking() {
                 >
                   <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <h3 className="font-bold text-yellow-800">⏳ En attente de paiement</h3>
+                    <h3 className="font-bold text-yellow-800">
+                      ⏳ En attente de paiement
+                    </h3>
                     <p className="text-sm text-yellow-700 mt-1">
-                      Votre paiement n'a pas encore été confirmé. Cela peut prendre quelques
-                      minutes.
+                      Votre paiement n'a pas encore été confirmé. Cela peut
+                      prendre quelques minutes.
                     </p>
                     <Button
                       onClick={handleVerifyPayment}
@@ -376,8 +399,8 @@ export default function OrderTracking() {
                     Commande Annulée
                   </h2>
                   <p className="text-red-600">
-                    Cette commande a été annulée. Veuillez contacter le support si vous avez
-                    des questions.
+                    Cette commande a été annulée. Veuillez contacter le support
+                    si vous avez des questions.
                   </p>
                 </motion.div>
               ) : (
@@ -452,7 +475,9 @@ export default function OrderTracking() {
                           >
                             <div
                               className={`${
-                                isCompleted ? "text-white" : "text-muted-foreground"
+                                isCompleted
+                                  ? "text-white"
+                                  : "text-muted-foreground"
                               }`}
                             >
                               {isCompleted ? (
@@ -494,11 +519,15 @@ export default function OrderTracking() {
                 <CardContent className="space-y-3">
                   <div className="flex items-center gap-2">
                     <User className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                    <span className="text-foreground">{order.customer_name}</span>
+                    <span className="text-foreground">
+                      {order.customer_name}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Phone className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                    <span className="text-foreground">{order.customer_phone}</span>
+                    <span className="text-foreground">
+                      {order.customer_phone}
+                    </span>
                   </div>
                   {order.delivery_address && (
                     <div className="flex items-start gap-2">
@@ -519,7 +548,10 @@ export default function OrderTracking() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {order.items.map((item, idx) => (
-                    <div key={idx} className="flex justify-between items-start gap-2 text-sm">
+                    <div
+                      key={idx}
+                      className="flex justify-between items-start gap-2 text-sm"
+                    >
                       <span className="text-muted-foreground">
                         {item.quantity}x {item.product_name}
                       </span>

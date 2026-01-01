@@ -187,13 +187,8 @@ export async function handleUpdateOrder(req: Request, res: Response) {
  */
 export async function handleCreatePayment(req: Request, res: Response) {
   try {
-    const {
-      order_id,
-      amount,
-      payment_method,
-      customer_name,
-      customer_phone,
-    } = req.body;
+    const { order_id, amount, payment_method, customer_name, customer_phone } =
+      req.body;
 
     if (!order_id || !amount || !payment_method) {
       return res.status(400).json({
@@ -301,7 +296,7 @@ export async function handleUpdatePayment(req: Request, res: Response) {
     paymentsStore.set(paymentId, updatedPayment);
     paymentsStore.set(
       `payment-for-order-${updatedPayment.order_id}`,
-      updatedPayment
+      updatedPayment,
     );
 
     return res.json({

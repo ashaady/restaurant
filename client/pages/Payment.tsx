@@ -38,13 +38,15 @@ interface Payment {
 export default function PaymentPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  
+
   const orderId = searchParams.get("order_id");
   const paymentId = searchParams.get("payment_id");
 
   const [order, setOrder] = useState<Order | null>(null);
   const [payment, setPayment] = useState<Payment | null>(null);
-  const [selectedMethod, setSelectedMethod] = useState<"wave" | "orange-money">("wave");
+  const [selectedMethod, setSelectedMethod] = useState<"wave" | "orange-money">(
+    "wave",
+  );
   const [isProcessing, setIsProcessing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -59,7 +61,8 @@ export default function PaymentPage() {
 
       try {
         // Load order
-        const { data: orderData, error: orderError } = await orders.get(orderId);
+        const { data: orderData, error: orderError } =
+          await orders.get(orderId);
         if (orderError || !orderData) {
           toast.error("Commande non trouvée");
           navigate("/");
@@ -68,7 +71,8 @@ export default function PaymentPage() {
         setOrder(orderData as any);
 
         // Load payment
-        const { data: paymentData, error: paymentError } = await payments.get(paymentId);
+        const { data: paymentData, error: paymentError } =
+          await payments.get(paymentId);
         if (paymentError || !paymentData) {
           toast.error("Enregistrement de paiement non trouvé");
           navigate("/");
@@ -120,10 +124,13 @@ export default function PaymentPage() {
       };
 
       // Call PayDunya initialize endpoint
-      const { data: paymentResult, error: paymentError } = await paydunya.initialize(paymentInitPayload);
+      const { data: paymentResult, error: paymentError } =
+        await paydunya.initialize(paymentInitPayload);
 
       if (paymentError || !paymentResult) {
-        const errorMsg = paymentError?.message || "Erreur lors de l'initialisation du paiement";
+        const errorMsg =
+          paymentError?.message ||
+          "Erreur lors de l'initialisation du paiement";
         toast.error(`❌ ${errorMsg}`);
         setIsProcessing(false);
         return;
@@ -144,7 +151,8 @@ export default function PaymentPage() {
         setIsProcessing(false);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Une erreur s'est produite";
+      const message =
+        error instanceof Error ? error.message : "Une erreur s'est produite";
       console.error("Payment error:", error);
       toast.error(`❌ Erreur: ${message}`);
       setIsProcessing(false);
@@ -188,8 +196,12 @@ export default function PaymentPage() {
           <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-3">
             <span className="text-2xl">🍗</span>
           </div>
-          <h1 className="text-xl font-black text-chicken-navy">CHICKEN MASTER</h1>
-          <p className="text-sm text-muted-foreground">Finalisation du paiement</p>
+          <h1 className="text-xl font-black text-chicken-navy">
+            CHICKEN MASTER
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Finalisation du paiement
+          </p>
         </div>
       </header>
 
@@ -225,7 +237,9 @@ export default function PaymentPage() {
           <div className="space-y-3 mb-6 pb-6 border-b border-border">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Commande N°</span>
-              <span className="font-bold text-red-600">{order.order_number}</span>
+              <span className="font-bold text-red-600">
+                {order.order_number}
+              </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Client</span>
@@ -234,7 +248,9 @@ export default function PaymentPage() {
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Type</span>
               <span className="font-semibold">
-                {order.order_type === "livraison" ? "🚚 Livraison" : "📦 À emporter"}
+                {order.order_type === "livraison"
+                  ? "🚚 Livraison"
+                  : "📦 À emporter"}
               </span>
             </div>
           </div>
@@ -265,12 +281,17 @@ export default function PaymentPage() {
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Sous-total</span>
               <span className="font-semibold">
-                {order.items.reduce((sum, item) => sum + item.price * item.quantity, 0).toLocaleString()} F
+                {order.items
+                  .reduce((sum, item) => sum + item.price * item.quantity, 0)
+                  .toLocaleString()}{" "}
+                F
               </span>
             </div>
             {order.order_type === "livraison" && (
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Frais de livraison</span>
+                <span className="text-muted-foreground">
+                  Frais de livraison
+                </span>
                 <span className="font-semibold">1.000 F</span>
               </div>
             )}
@@ -307,13 +328,9 @@ export default function PaymentPage() {
                 className="flex items-center p-4 border-2 rounded-2xl cursor-pointer transition-all hover:border-blue-500"
                 style={{
                   borderColor:
-                    selectedMethod === "wave"
-                      ? "#3B82F6"
-                      : "#E5E7EB",
+                    selectedMethod === "wave" ? "#3B82F6" : "#E5E7EB",
                   backgroundColor:
-                    selectedMethod === "wave"
-                      ? "#EFF6FF"
-                      : "transparent",
+                    selectedMethod === "wave" ? "#EFF6FF" : "transparent",
                 }}
               >
                 <div className="w-16 h-12 bg-white rounded-lg border border-blue-200 flex items-center justify-center mr-4 flex-shrink-0 text-xl">
@@ -334,9 +351,7 @@ export default function PaymentPage() {
                 className="flex items-center p-4 border-2 rounded-2xl cursor-pointer transition-all hover:border-orange-500"
                 style={{
                   borderColor:
-                    selectedMethod === "orange-money"
-                      ? "#EA580C"
-                      : "#E5E7EB",
+                    selectedMethod === "orange-money" ? "#EA580C" : "#E5E7EB",
                   backgroundColor:
                     selectedMethod === "orange-money"
                       ? "#FFF7ED"
@@ -347,7 +362,9 @@ export default function PaymentPage() {
                   🍊
                 </div>
                 <div className="flex-1">
-                  <p className="font-bold text-lg text-foreground">Orange Money</p>
+                  <p className="font-bold text-lg text-foreground">
+                    Orange Money
+                  </p>
                   <p className="text-sm text-muted-foreground">
                     Paiement mobile rapide
                   </p>
@@ -371,7 +388,9 @@ export default function PaymentPage() {
         >
           <Shield className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="font-semibold text-green-900">🛡️ Paiement 100% sécurisé par PayDunya</p>
+            <p className="font-semibold text-green-900">
+              🛡️ Paiement 100% sécurisé par PayDunya
+            </p>
             <p className="text-sm text-green-700 mt-1">
               Vos données bancaires sont protégées et cryptées
             </p>

@@ -64,10 +64,7 @@ export async function handlePaydunya_Initialize(req: Request, res: Response) {
     };
 
     paymentsStore.set(payment_id, updatedPayment);
-    paymentsStore.set(
-      `payment-for-order-${order_id}`,
-      updatedPayment
-    );
+    paymentsStore.set(`payment-for-order-${order_id}`, updatedPayment);
 
     // In production, you would:
     // 1. Call actual PayDunya API to create invoice

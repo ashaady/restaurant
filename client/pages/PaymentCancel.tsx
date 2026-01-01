@@ -9,7 +9,7 @@ import { orders, payments } from "@/lib/api";
 export default function PaymentCancel() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  
+
   const orderId = searchParams.get("order_id");
   const paymentId = searchParams.get("payment_id");
 
@@ -55,9 +55,10 @@ export default function PaymentCancel() {
     loadOrder();
   }, [orderId, paymentId, navigate]);
 
-  const retryPaymentUrl = orderId && paymentId 
-    ? `/payment?order_id=${orderId}&payment_id=${paymentId}`
-    : "/";
+  const retryPaymentUrl =
+    orderId && paymentId
+      ? `/payment?order_id=${orderId}&payment_id=${paymentId}`
+      : "/";
 
   if (isLoading) {
     return (
@@ -108,8 +109,8 @@ export default function PaymentCancel() {
           <p className="text-foreground mb-2">Vous avez annulé le paiement</p>
           <p className="text-sm text-muted-foreground">
             Votre commande{" "}
-            <span className="font-bold text-primary">#{orderNumber}</span> est toujours
-            en attente. Vous pouvez réessayer le paiement.
+            <span className="font-bold text-primary">#{orderNumber}</span> est
+            toujours en attente. Vous pouvez réessayer le paiement.
           </p>
         </motion.div>
 
@@ -121,7 +122,8 @@ export default function PaymentCancel() {
           className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-6 text-left"
         >
           <p className="text-xs text-orange-700">
-            ⚠️ Si vous avez été débité, le montant sera remboursé dans 24-48 heures
+            ⚠️ Si vous avez été débité, le montant sera remboursé dans 24-48
+            heures
           </p>
         </motion.div>
 
