@@ -210,17 +210,12 @@ export default function Home() {
                   </button>
                 </Link>
 
-                <Link to="/menu" className="group">
+                <Link to="/menu" className="group col-span-2 md:col-span-1">
                   <button className="w-full h-24 md:h-32 bg-primary hover:bg-primary/90 rounded-xl md:rounded-2xl flex flex-col items-center justify-center gap-2 transition-all duration-300 hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl">
                     <ShoppingCart className="w-6 h-6 md:w-8 md:h-8 text-white" />
                     <span className="font-bold text-sm md:text-base text-white">Menu</span>
                   </button>
                 </Link>
-
-                <button className="w-full h-24 md:h-32 bg-purple-500 hover:bg-purple-600 rounded-xl md:rounded-2xl flex flex-col items-center justify-center gap-2 transition-all duration-300 hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl">
-                  <Gift className="w-6 h-6 md:w-8 md:h-8 text-white" />
-                  <span className="font-bold text-sm md:text-base text-white">Fidélité</span>
-                </button>
               </div>
 
               {/* Status Indicator */}
