@@ -31,8 +31,36 @@ export default function CartDrawer({
   onRemoveItem,
   onCheckout,
 }: CartDrawerProps) {
+  const navigate = useNavigate();
   const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
+
+  const handleCheckout = () => {
+    // Generate order ID
+    const orderId = `order-${Date.now()}`;
+
+    // Store order in localStorage
+    const order = {
+      id: orderId,
+      orderNumber: `CM${Math.random().toString().slice(2, 10)}`,
+      customer_name: "Client",
+      customer_phone: "",
+      items: items.map((item) => ({
+        product_name: item.product_name,
+        quantity: item.quantity,
+        price: item.price,
+      })),
+      total,
+      order_type: "livraison" as const,
+      status: "pending",
+    };
+
+    localStorage.setItem(`order-${orderId}`, JSON.stringify(order));
+
+    // Navigate to payment page
+    navigate(`/payment?order_id=${orderId}`);
+    onOpenChange(false);
+  };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
