@@ -176,10 +176,7 @@ export default function CartDrawer({
                 </div>
 
                 <Button
-                  onClick={() => {
-                    onCheckout();
-                    onOpenChange(false);
-                  }}
+                  onClick={handleCheckout}
                   className="w-full bg-primary text-white hover:bg-primary/90 h-12 font-semibold text-base"
                 >
                   Valider la commande
