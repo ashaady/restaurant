@@ -78,45 +78,69 @@ export default function CartPage({ items = [], onUpdateQuantity, onRemoveItem }:
 
     setIsProcessing(true);
     try {
-      // Create order
+      // Generate order number
       const orderNumber = "CM" + Date.now().toString().slice(-8);
 
-      // Store order in localStorage for demo purposes
-      const order = {
-        id: `order-${Date.now()}`,
-        orderNumber,
-        status: "pending",
-        orderType,
-        items,
-        total,
+      // Step 1: Create Order
+      const orderPayload = {
+        order_number: orderNumber,
         customer_name: name,
         customer_phone: phone,
         delivery_address: address,
-        payment_method: method,
-        created_at: new Date().toISOString(),
-        status_history: [
-          {
-            status: "pending",
-            timestamp: new Date().toISOString(),
-            note: "Commande reçue - En attente de paiement",
-          },
-        ],
+        items: items.map((item) => ({
+          product_name: item.product_name,
+          quantity: item.quantity,
+          price: item.price,
+          selected_drink: item.selected_drink,
+        })),
+        total,
+        order_type: orderType,
       };
 
-      localStorage.setItem(
-        `order-${order.id}`,
-        JSON.stringify(order)
-      );
+      const { data: orderData, error: orderError } = await orders.create(orderPayload);
 
-      // Clear cart
-      // In a real app, this would be handled by clearing React Query cache
+      if (orderError || !orderData) {
+        toast.error(orderError?.message || "Erreur lors de la création de la commande");
+        return;
+      }
+
+      const orderId = (orderData as any).id;
+
+      // Step 2: Create Payment
+      const paymentPayload = {
+        order_id: orderId,
+        amount: total,
+        payment_method: method,
+        customer_name: name,
+        customer_phone: phone,
+      };
+
+      const { data: paymentData, error: paymentError } = await payments.create(paymentPayload);
+
+      if (paymentError || !paymentData) {
+        toast.error(paymentError?.message || "Erreur lors de la création du paiement");
+        return;
+      }
+
+      const paymentId = (paymentData as any).id;
+
+      // Store backup copy in localStorage for demo purposes
+      localStorage.setItem(
+        `order-${orderId}`,
+        JSON.stringify(orderData)
+      );
+      localStorage.setItem(
+        `payment-${paymentId}`,
+        JSON.stringify(paymentData)
+      );
 
       toast.success("Redirection vers le paiement...");
 
-      // Redirect to payment page
-      navigate(`/payment?order_id=${order.id}`);
+      // Step 3: Redirect to payment page
+      navigate(`/payment?order_id=${orderId}&payment_id=${paymentId}`);
     } catch (error) {
-      toast.error("Erreur lors de la création de la commande. Veuillez réessayer.");
+      const message = error instanceof Error ? error.message : "Une erreur s'est produite";
+      toast.error(message);
     } finally {
       setIsProcessing(false);
       setPaymentOpen(false);
