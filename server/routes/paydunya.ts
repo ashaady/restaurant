@@ -93,6 +93,13 @@ export async function handlePaydunya_Initialize(req: Request, res: Response) {
 /**
  * Handle PayDunya callback/webhook
  * POST /api/paydunya/callback
+ *
+ * PayDunya sends callback with:
+ * {
+ *   status: "completed" | "failed" | "cancelled",
+ *   token: string,
+ *   custom_data: { order_id: string }
+ * }
  */
 export async function handlePaydunya_Callback(req: Request, res: Response) {
   try {
@@ -106,17 +113,76 @@ export async function handlePaydunya_Callback(req: Request, res: Response) {
       });
     }
 
+    // Get the order
+    const order = ordersStore.get(orderId);
+    if (!order) {
+      return res.status(404).json({
+        error: "Order not found",
+      });
+    }
+
+    // Get the payment record by order
+    const payment = paymentsStore.get(`payment-for-order-${orderId}`);
+    if (!payment) {
+      return res.status(404).json({
+        error: "Payment record not found",
+      });
+    }
+
     if (status === "completed") {
-      console.log(`Payment successful for order ${orderId}`);
+      console.log(`✅ Payment successful for order ${orderId}`);
+
+      // Update payment status
+      const updatedPayment = {
+        ...payment,
+        status: "completed",
+        paid_at: new Date().toISOString(),
+      };
+      paymentsStore.set(payment.id, updatedPayment);
+      paymentsStore.set(`payment-for-order-${orderId}`, updatedPayment);
+
+      // Update order status
+      const updatedOrder = {
+        ...order,
+        status: "confirmed",
+      };
+      ordersStore.set(orderId, updatedOrder);
+
       return res.json({
         success: true,
         message: "Payment processed successfully",
       });
     } else if (status === "failed") {
-      console.log(`Payment failed for order ${orderId}`);
+      console.log(`❌ Payment failed for order ${orderId}`);
+
+      // Update payment status
+      const updatedPayment = {
+        ...payment,
+        status: "failed",
+        error_message: "Payment failed at PayDunya",
+      };
+      paymentsStore.set(payment.id, updatedPayment);
+      paymentsStore.set(`payment-for-order-${orderId}`, updatedPayment);
+
       return res.json({
         success: true,
         message: "Payment failure recorded",
+      });
+    } else if (status === "cancelled") {
+      console.log(`⚠️ Payment cancelled for order ${orderId}`);
+
+      // Update payment status
+      const updatedPayment = {
+        ...payment,
+        status: "cancelled",
+        error_message: "Payment cancelled by user",
+      };
+      paymentsStore.set(payment.id, updatedPayment);
+      paymentsStore.set(`payment-for-order-${orderId}`, updatedPayment);
+
+      return res.json({
+        success: true,
+        message: "Payment cancellation recorded",
       });
     }
 
