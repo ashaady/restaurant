@@ -199,34 +199,58 @@ export async function handlePaydunya_Callback(req: Request, res: Response) {
 }
 
 /**
- * Check payment status
- * GET /api/paydunya/status/:orderId
+ * Check payment status by token
+ * GET /api/paydunya/verify/:token
+ * OR
+ * GET /api/paydunya/status/:orderId (when used with order ID)
  */
 export async function handlePaydunya_Status(req: Request, res: Response) {
   try {
-    const { orderId } = req.params;
+    const { token: paramToken, orderId } = req.params;
 
-    if (!orderId) {
-      return res.status(400).json({
-        error: "Order ID missing",
+    // Try to find payment by token or order ID
+    let payment = null;
+
+    if (orderId) {
+      // Look up by order ID
+      payment = paymentsStore.get(`payment-for-order-${orderId}`);
+    } else if (paramToken) {
+      // Look up by token - find by searching through all payments
+      for (const [key, value] of paymentsStore.entries()) {
+        if (
+          !key.startsWith("payment-for-order-") &&
+          (value as any).paydunya_token === paramToken
+        ) {
+          payment = value;
+          break;
+        }
+      }
+    }
+
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        error: "Payment not found",
       });
     }
 
-    const mockStatus = {
-      order_id: orderId,
-      payment_method: "wave",
-      status: "pending",
-      transaction_id: `txn_${Date.now()}`,
-      created_at: new Date().toISOString(),
-    };
-
     return res.json({
       success: true,
-      data: mockStatus,
+      data: {
+        payment_id: (payment as any).id,
+        order_id: (payment as any).order_id,
+        status: (payment as any).status,
+        payment_method: (payment as any).payment_method,
+        amount: (payment as any).amount,
+        created_at: (payment as any).created_at,
+        paid_at: (payment as any).paid_at,
+        error_message: (payment as any).error_message,
+      },
     });
   } catch (error) {
     console.error("Payment status check error:", error);
     return res.status(500).json({
+      success: false,
       error: "Failed to check payment status",
     });
   }
