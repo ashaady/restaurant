@@ -10,6 +10,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import PaymentMethodSelector from "@/components/PaymentMethodSelector";
 import { toast } from "sonner";
+import { orders, payments } from "@/lib/api";
 
 interface CartItem {
   id: string;
@@ -27,9 +28,15 @@ interface CartPageProps {
   onRemoveItem: (itemId: string) => void;
 }
 
-export default function CartPage({ items = [], onUpdateQuantity, onRemoveItem }: CartPageProps) {
+export default function CartPage({
+  items = [],
+  onUpdateQuantity,
+  onRemoveItem,
+}: CartPageProps) {
   const navigate = useNavigate();
-  const [orderType, setOrderType] = useState<"livraison" | "emporter">("livraison");
+  const [orderType, setOrderType] = useState<"livraison" | "emporter">(
+    "livraison",
+  );
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
@@ -37,7 +44,10 @@ export default function CartPage({ items = [], onUpdateQuantity, onRemoveItem }:
   const [isProcessing, setIsProcessing] = useState(false);
 
   const DELIVERY_FEE = 1000;
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const subtotal = items.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0,
+  );
   const deliveryFee = orderType === "livraison" ? DELIVERY_FEE : 0;
   const total = subtotal + deliveryFee;
 
@@ -77,45 +87,70 @@ export default function CartPage({ items = [], onUpdateQuantity, onRemoveItem }:
 
     setIsProcessing(true);
     try {
-      // Create order
+      // Generate order number
       const orderNumber = "CM" + Date.now().toString().slice(-8);
 
-      // Store order in localStorage for demo purposes
-      const order = {
-        id: `order-${Date.now()}`,
-        orderNumber,
-        status: "pending",
-        orderType,
-        items,
-        total,
+      // Step 1: Create Order
+      const orderPayload = {
+        order_number: orderNumber,
         customer_name: name,
         customer_phone: phone,
         delivery_address: address,
-        payment_method: method,
-        created_at: new Date().toISOString(),
-        status_history: [
-          {
-            status: "pending",
-            timestamp: new Date().toISOString(),
-            note: "Commande reçue - En attente de paiement",
-          },
-        ],
+        items: items.map((item) => ({
+          product_name: item.product_name,
+          quantity: item.quantity,
+          price: item.price,
+          selected_drink: item.selected_drink,
+        })),
+        total,
+        order_type: orderType,
       };
 
-      localStorage.setItem(
-        `order-${order.id}`,
-        JSON.stringify(order)
-      );
+      const { data: orderData, error: orderError } =
+        await orders.create(orderPayload);
 
-      // Clear cart
-      // In a real app, this would be handled by clearing React Query cache
+      if (orderError || !orderData) {
+        toast.error(
+          orderError?.message || "Erreur lors de la création de la commande",
+        );
+        return;
+      }
+
+      const orderId = (orderData as any).id;
+
+      // Step 2: Create Payment
+      const paymentPayload = {
+        order_id: orderId,
+        amount: total,
+        payment_method: method,
+        customer_name: name,
+        customer_phone: phone,
+      };
+
+      const { data: paymentData, error: paymentError } =
+        await payments.create(paymentPayload);
+
+      if (paymentError || !paymentData) {
+        toast.error(
+          paymentError?.message || "Erreur lors de la création du paiement",
+        );
+        return;
+      }
+
+      const paymentId = (paymentData as any).id;
+
+      // Store backup copy in localStorage for demo purposes
+      localStorage.setItem(`order-${orderId}`, JSON.stringify(orderData));
+      localStorage.setItem(`payment-${paymentId}`, JSON.stringify(paymentData));
 
       toast.success("Redirection vers le paiement...");
 
-      // Redirect to payment page
-      navigate(`/payment?order_id=${order.id}`);
+      // Step 3: Redirect to payment page
+      navigate(`/payment?order_id=${orderId}&payment_id=${paymentId}`);
     } catch (error) {
-      toast.error("Erreur lors de la création de la commande. Veuillez réessayer.");
+      const message =
+        error instanceof Error ? error.message : "Une erreur s'est produite";
+      toast.error(message);
     } finally {
       setIsProcessing(false);
       setPaymentOpen(false);
@@ -222,7 +257,9 @@ export default function CartPage({ items = [], onUpdateQuantity, onRemoveItem }:
                       {/* Quantity Controls */}
                       <div className="flex items-center gap-2 mt-3 bg-gray-100 rounded-lg w-fit">
                         <button
-                          onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
+                          onClick={() =>
+                            handleUpdateQuantity(item.id, item.quantity - 1)
+                          }
                           className="p-1 hover:bg-gray-200 transition-colors"
                         >
                           <Minus className="w-4 h-4 text-gray-600" />
@@ -231,7 +268,9 @@ export default function CartPage({ items = [], onUpdateQuantity, onRemoveItem }:
                           {item.quantity}
                         </span>
                         <button
-                          onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
+                          onClick={() =>
+                            handleUpdateQuantity(item.id, item.quantity + 1)
+                          }
                           className="p-1 hover:bg-gray-200 transition-colors"
                         >
                           <Plus className="w-4 h-4 text-gray-600" />
@@ -264,14 +303,23 @@ export default function CartPage({ items = [], onUpdateQuantity, onRemoveItem }:
                   <CardTitle>Mode de commande</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <RadioGroup value={orderType} onValueChange={(v) => setOrderType(v as any)}>
+                  <RadioGroup
+                    value={orderType}
+                    onValueChange={(v) => setOrderType(v as any)}
+                  >
                     <div className="space-y-2">
                       <Label
                         htmlFor="delivery"
                         className="flex items-center gap-3 p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-primary transition-colors"
                         style={{
-                          borderColor: orderType === "livraison" ? "hsl(var(--primary))" : undefined,
-                          backgroundColor: orderType === "livraison" ? "hsl(var(--primary) / 0.05)" : undefined,
+                          borderColor:
+                            orderType === "livraison"
+                              ? "hsl(var(--primary))"
+                              : undefined,
+                          backgroundColor:
+                            orderType === "livraison"
+                              ? "hsl(var(--primary) / 0.05)"
+                              : undefined,
                         }}
                       >
                         <RadioGroupItem value="livraison" id="delivery" />
@@ -279,7 +327,9 @@ export default function CartPage({ items = [], onUpdateQuantity, onRemoveItem }:
                           <Truck className="w-4 h-4" />
                           <div>
                             <p className="font-semibold">Livraison</p>
-                            <p className="text-xs text-muted-foreground">+1.000 F</p>
+                            <p className="text-xs text-muted-foreground">
+                              +1.000 F
+                            </p>
                           </div>
                         </div>
                       </Label>
@@ -287,8 +337,14 @@ export default function CartPage({ items = [], onUpdateQuantity, onRemoveItem }:
                         htmlFor="takeout"
                         className="flex items-center gap-3 p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-chicken-green transition-colors"
                         style={{
-                          borderColor: orderType === "emporter" ? "hsl(var(--chicken-green))" : undefined,
-                          backgroundColor: orderType === "emporter" ? "hsl(var(--chicken-green) / 0.05)" : undefined,
+                          borderColor:
+                            orderType === "emporter"
+                              ? "hsl(var(--chicken-green))"
+                              : undefined,
+                          backgroundColor:
+                            orderType === "emporter"
+                              ? "hsl(var(--chicken-green) / 0.05)"
+                              : undefined,
                         }}
                       >
                         <RadioGroupItem value="emporter" id="takeout" />
@@ -296,7 +352,9 @@ export default function CartPage({ items = [], onUpdateQuantity, onRemoveItem }:
                           <Package className="w-4 h-4" />
                           <div>
                             <p className="font-semibold">À emporter</p>
-                            <p className="text-xs text-muted-foreground">Gratuit</p>
+                            <p className="text-xs text-muted-foreground">
+                              Gratuit
+                            </p>
                           </div>
                         </div>
                       </Label>
@@ -347,7 +405,10 @@ export default function CartPage({ items = [], onUpdateQuantity, onRemoveItem }:
                   >
                     {orderType === "livraison" && (
                       <div>
-                        <Label htmlFor="address" className="text-sm font-semibold">
+                        <Label
+                          htmlFor="address"
+                          className="text-sm font-semibold"
+                        >
                           Adresse de livraison *
                         </Label>
                         <Input

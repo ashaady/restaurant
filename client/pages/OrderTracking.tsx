@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -11,11 +11,15 @@ import {
   Phone,
   User,
   ChevronLeft,
+  AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 import Layout from "@/components/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { orders, payments } from "@/lib/api";
 
 interface OrderItem {
   product_name: string;
@@ -31,17 +35,29 @@ interface StatusHistoryEntry {
 
 interface Order {
   id: string;
-  orderNumber: string;
+  order_number: string;
   status: string;
-  orderType: "livraison" | "emporter";
+  order_type: "livraison" | "emporter";
   items: OrderItem[];
   total: number;
-  createdAt: string;
+  created_at: string;
   customer_name: string;
   customer_phone: string;
   delivery_address?: string;
-  status_history: StatusHistoryEntry[];
+  status_history?: StatusHistoryEntry[];
   estimated_delivery_time?: string;
+}
+
+interface Payment {
+  id: string;
+  order_id: string;
+  amount: number;
+  payment_method: string;
+  status: string;
+  paydunya_token?: string;
+  paid_at?: string;
+  error_message?: string;
+  created_at: string;
 }
 
 const statusConfig: Record<
@@ -92,71 +108,160 @@ const statusConfig: Record<
   },
 };
 
-// Mock order fetching
-function getMockOrder(id: string): Order | null {
-  const orders: Record<string, Order> = {
-    "order-1": {
-      id: "order-1",
-      orderNumber: "CM12345678",
-      status: "delivered",
-      orderType: "livraison",
-      items: [
-        { product_name: "Menu Classique", quantity: 1, price: 4500 },
-        { product_name: "Frites Sauce", quantity: 1, price: 1500 },
-      ],
-      total: 7000,
-      createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      customer_name: "Amadou Diop",
-      customer_phone: "77 123 45 67",
-      delivery_address: "Sicap Liberté 6, Villa 123",
-      estimated_delivery_time: "30-45 min",
-      status_history: [
-        { status: "pending", timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 5 * 60 * 1000).toISOString(), note: "Commande reçue" },
-        { status: "confirmed", timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 10 * 60 * 1000).toISOString(), note: "Confirmée" },
-        { status: "preparing", timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 15 * 60 * 1000).toISOString(), note: "En préparation" },
-        { status: "ready", timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 30 * 60 * 1000).toISOString(), note: "Prête" },
-        { status: "out_for_delivery", timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 35 * 60 * 1000).toISOString(), note: "En route" },
-        { status: "delivered", timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 50 * 60 * 1000).toISOString(), note: "Livrée" },
-      ],
-    },
-  };
-
-  // Try to get from localStorage first
-  const stored = localStorage.getItem(`order-${id}`);
-  if (stored) {
-    return JSON.parse(stored);
-  }
-
-  return orders[id] || null;
-}
-
 export default function OrderTracking() {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
-  const [order, setOrder] = useState<Order | null>(null);
-  const [loading, setLoading] = useState(true);
 
+  const [order, setOrder] = useState<Order | null>(null);
+  const [payment, setPayment] = useState<Payment | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [verifyingPayment, setVerifyingPayment] = useState(false);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Load order and payment
   useEffect(() => {
     if (!orderId) {
       navigate("/orders");
       return;
     }
 
-    const fetchOrder = async () => {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      const data = getMockOrder(orderId);
-      if (data) {
-        setOrder(data);
-      } else {
-        toast.error("Commande non trouvée");
-        navigate("/orders");
+    const loadData = async () => {
+      try {
+        // Load order from API
+        const { data: orderData, error: orderError } =
+          await orders.get(orderId);
+
+        if (orderError || !orderData) {
+          toast.error("Commande non trouvée");
+          navigate("/orders");
+          return;
+        }
+
+        setOrder(orderData as any);
+
+        // Try to load payment for this order
+        try {
+          const { data: paymentData } = await payments.get(
+            `payment-for-order-${orderId}`,
+          );
+          if (paymentData) {
+            setPayment(paymentData as any);
+          }
+        } catch (err) {
+          // Payment not found is OK
+          console.log("Payment not found for order");
+        }
+      } catch (error) {
+        console.error("Error loading data:", error);
+        toast.error("Erreur lors du chargement");
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
-    fetchOrder();
+    loadData();
   }, [orderId, navigate]);
+
+  // Setup polling for payment status
+  useEffect(() => {
+    if (!order || !payment) return;
+
+    const setupPolling = () => {
+      // Clean up existing interval
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+
+      const pollPaymentStatus = async () => {
+        try {
+          // If payment has a token, verify it
+          if (payment.paydunya_token) {
+            const { data: statusData } = await payments.get(payment.id);
+            if (statusData) {
+              const updatedPayment = statusData as any;
+              setPayment(updatedPayment);
+
+              // If payment was just completed, update order
+              if (
+                updatedPayment.status === "completed" &&
+                payment.status !== "completed"
+              ) {
+                toast.success(
+                  "✅ Paiement confirmé ! Votre commande est en cours de préparation",
+                );
+                // Refresh order status
+                const { data: updatedOrder } = await orders.get(orderId!);
+                if (updatedOrder) {
+                  setOrder(updatedOrder as any);
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error("Polling error:", error);
+        }
+      };
+
+      // Determine polling interval based on payment status
+      let interval = 10000; // 10 seconds for confirmed
+      if (payment.status === "pending" || payment.status === "processing") {
+        interval = 5000; // 5 seconds for pending/processing
+      }
+
+      pollIntervalRef.current = setInterval(pollPaymentStatus, interval);
+    };
+
+    setupPolling();
+
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, [order, payment, orderId]);
+
+  // Handle manual payment verification
+  const handleVerifyPayment = async () => {
+    if (!payment?.paydunya_token) {
+      toast.error("Token de paiement non disponible");
+      return;
+    }
+
+    setVerifyingPayment(true);
+    try {
+      const response = await fetch(
+        `/api/paydunya/verify/${payment.paydunya_token}`,
+      );
+      const data = await response.json();
+
+      if (data.success && data.data) {
+        const paymentStatus = data.data.status;
+        setPayment((prev) =>
+          prev ? { ...prev, status: paymentStatus } : null,
+        );
+
+        if (paymentStatus === "completed") {
+          toast.success("✅ Paiement confirmé!");
+          // Reload order
+          const { data: updatedOrder } = await orders.get(orderId!);
+          if (updatedOrder) {
+            setOrder(updatedOrder as any);
+          }
+        } else if (paymentStatus === "pending") {
+          toast.info("⏳ Le paiement est toujours en attente");
+        } else if (paymentStatus === "failed") {
+          toast.error("❌ Le paiement a échoué");
+        }
+      } else {
+        toast.error("Impossible de vérifier le paiement");
+      }
+    } catch (error) {
+      console.error("Verify payment error:", error);
+      toast.error("Erreur lors de la vérification du paiement");
+    } finally {
+      setVerifyingPayment(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -175,8 +280,13 @@ export default function OrderTracking() {
     return (
       <Layout cartCount={0}>
         <div className="container mx-auto px-4 py-16 text-center">
-          <h1 className="text-2xl font-bold text-foreground">Commande non trouvée</h1>
-          <Link to="/orders" className="mt-4 inline-block text-primary font-semibold">
+          <h1 className="text-2xl font-bold text-foreground">
+            Commande non trouvée
+          </h1>
+          <Link
+            to="/orders"
+            className="mt-4 inline-block text-primary font-semibold"
+          >
             Retour aux commandes
           </Link>
         </div>
@@ -185,12 +295,26 @@ export default function OrderTracking() {
   }
 
   const currentStatusConfig = statusConfig[order.status];
-  const steps = order.orderType === "livraison"
-    ? ["pending", "confirmed", "preparing", "ready", "out_for_delivery", "delivered"]
-    : ["pending", "confirmed", "preparing", "ready"];
+  const steps =
+    order.order_type === "livraison"
+      ? [
+          "pending",
+          "confirmed",
+          "preparing",
+          "ready",
+          "out_for_delivery",
+          "delivered",
+        ]
+      : ["pending", "confirmed", "preparing", "ready"];
 
-  const subtotal = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const deliveryFee = order.orderType === "livraison" ? 1000 : 0;
+  const subtotal = order.items.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0,
+  );
+  const deliveryFee = order.order_type === "livraison" ? 1000 : 0;
+
+  // Check if payment is pending
+  const isPending = order.status === "pending" && payment?.status === "pending";
 
   return (
     <Layout cartCount={0}>
@@ -205,10 +329,10 @@ export default function OrderTracking() {
             <span className="font-semibold">Mes commandes</span>
           </Link>
           <h1 className="text-3xl md:text-4xl font-black mb-2">
-            Commande #{order.orderNumber}
+            Commande #{order.order_number}
           </h1>
           <p className="text-white/90">
-            {new Date(order.createdAt).toLocaleDateString("fr-FR", {
+            {new Date(order.created_at).toLocaleDateString("fr-FR", {
               day: "numeric",
               month: "long",
               year: "numeric",
@@ -224,7 +348,44 @@ export default function OrderTracking() {
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
             {/* Left Column: Timeline */}
-            <div className="md:col-span-2">
+            <div className="md:col-span-2 space-y-6">
+              {/* Payment Pending Alert */}
+              {isPending && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg flex items-start gap-4"
+                >
+                  <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <h3 className="font-bold text-yellow-800">
+                      ⏳ En attente de paiement
+                    </h3>
+                    <p className="text-sm text-yellow-700 mt-1">
+                      Votre paiement n'a pas encore été confirmé. Cela peut
+                      prendre quelques minutes.
+                    </p>
+                    <Button
+                      onClick={handleVerifyPayment}
+                      disabled={verifyingPayment}
+                      className="mt-3 bg-yellow-600 hover:bg-yellow-700 text-white h-9 text-sm flex items-center gap-2"
+                    >
+                      {verifyingPayment ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          Vérification...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-4 h-4" />
+                          Vérifier le statut du paiement
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </motion.div>
+              )}
+
               {order.status === "cancelled" ? (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.9 }}
@@ -238,7 +399,8 @@ export default function OrderTracking() {
                     Commande Annulée
                   </h2>
                   <p className="text-red-600">
-                    Cette commande a été annulée. Veuillez contacter le support si vous avez des questions.
+                    Cette commande a été annulée. Veuillez contacter le support
+                    si vous avez des questions.
                   </p>
                 </motion.div>
               ) : (
@@ -247,10 +409,11 @@ export default function OrderTracking() {
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className={`${currentStatusConfig.bgColor} rounded-2xl p-6 md:p-8 mb-8`}
+                    className={`${currentStatusConfig.bgColor} rounded-2xl p-6 md:p-8`}
                   >
                     <div className="flex items-center gap-6">
-                      <div className="w-20 h-20 rounded-full flex items-center justify-center flex-shrink-0"
+                      <div
+                        className="w-20 h-20 rounded-full flex items-center justify-center flex-shrink-0"
                         style={{
                           background: currentStatusConfig.bgColor,
                         }}
@@ -277,9 +440,6 @@ export default function OrderTracking() {
                       const stepConfig = statusConfig[stepStatus];
                       const isCompleted = steps.indexOf(order.status) >= idx;
                       const isActive = order.status === stepStatus;
-                      const statusHistoryEntry = order.status_history.find(
-                        (h) => h.status === stepStatus
-                      );
 
                       return (
                         <motion.div
@@ -315,13 +475,15 @@ export default function OrderTracking() {
                           >
                             <div
                               className={`${
-                                isCompleted ? "text-white" : "text-muted-foreground"
+                                isCompleted
+                                  ? "text-white"
+                                  : "text-muted-foreground"
                               }`}
                             >
                               {isCompleted ? (
                                 <CheckCircle className="w-8 h-8" />
                               ) : (
-                                statusConfig[stepStatus].icon
+                                stepConfig.icon
                               )}
                             </div>
                           </div>
@@ -330,25 +492,13 @@ export default function OrderTracking() {
                           <div className="pt-2 flex-1">
                             <h4
                               className={`font-bold text-lg ${
-                                isCompleted ? "text-foreground" : "text-muted-foreground"
+                                isCompleted
+                                  ? "text-foreground"
+                                  : "text-muted-foreground"
                               }`}
                             >
                               {stepConfig.label}
                             </h4>
-                            {statusHistoryEntry && (
-                              <div className="text-sm text-muted-foreground mt-1">
-                                <p>{statusHistoryEntry.note}</p>
-                                <p className="text-xs">
-                                  {new Date(statusHistoryEntry.timestamp).toLocaleTimeString(
-                                    "fr-FR",
-                                    {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    }
-                                  )}
-                                </p>
-                              </div>
-                            )}
                           </div>
                         </motion.div>
                       );
@@ -369,16 +519,22 @@ export default function OrderTracking() {
                 <CardContent className="space-y-3">
                   <div className="flex items-center gap-2">
                     <User className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                    <span className="text-foreground">{order.customer_name}</span>
+                    <span className="text-foreground">
+                      {order.customer_name}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Phone className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                    <span className="text-foreground">{order.customer_phone}</span>
+                    <span className="text-foreground">
+                      {order.customer_phone}
+                    </span>
                   </div>
                   {order.delivery_address && (
                     <div className="flex items-start gap-2">
                       <MapPin className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
-                      <span className="text-foreground text-sm">{order.delivery_address}</span>
+                      <span className="text-foreground text-sm">
+                        {order.delivery_address}
+                      </span>
                     </div>
                   )}
                 </CardContent>
@@ -392,7 +548,10 @@ export default function OrderTracking() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {order.items.map((item, idx) => (
-                    <div key={idx} className="flex justify-between items-start gap-2 text-sm">
+                    <div
+                      key={idx}
+                      className="flex justify-between items-start gap-2 text-sm"
+                    >
                       <span className="text-muted-foreground">
                         {item.quantity}x {item.product_name}
                       </span>
@@ -409,7 +568,7 @@ export default function OrderTracking() {
                         {subtotal.toLocaleString()} F
                       </span>
                     </div>
-                    {order.orderType === "livraison" && (
+                    {order.order_type === "livraison" && (
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Livraison</span>
                         <span className="text-foreground font-semibold">
@@ -426,6 +585,50 @@ export default function OrderTracking() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Payment Info */}
+              {payment && (
+                <Card>
+                  <CardHeader className="flex flex-row items-center gap-2">
+                    <Package className="w-5 h-5 text-primary" />
+                    <CardTitle className="text-lg">Paiement</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Méthode</span>
+                      <span className="font-semibold capitalize">
+                        {payment.payment_method}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Montant</span>
+                      <span className="font-semibold">
+                        {payment.amount.toLocaleString()} F
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Statut</span>
+                      <Badge
+                        variant={
+                          payment.status === "completed"
+                            ? "default"
+                            : payment.status === "failed"
+                              ? "destructive"
+                              : "secondary"
+                        }
+                      >
+                        {payment.status === "completed"
+                          ? "✓ Complété"
+                          : payment.status === "pending"
+                            ? "En attente"
+                            : payment.status === "processing"
+                              ? "Traitement"
+                              : payment.status}
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </div>
         </div>

@@ -1,103 +1,160 @@
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Lock, Loader } from "lucide-react";
+import { Lock, Loader, Shield } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { paydunya, orders, payments } from "@/lib/api";
 
 interface OrderItem {
   product_name: string;
   quantity: number;
   price: number;
+  selected_drink?: string;
 }
 
 interface Order {
   id: string;
-  orderNumber: string;
+  order_number: string;
   customer_name: string;
   customer_phone: string;
   items: OrderItem[];
   total: number;
   order_type: "livraison" | "emporter";
+  delivery_address?: string;
 }
 
-export default function Payment() {
+interface Payment {
+  id: string;
+  order_id: string;
+  amount: number;
+  payment_method: "wave" | "orange-money";
+  status: string;
+}
+
+export default function PaymentPage() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+
   const orderId = searchParams.get("order_id");
+  const paymentId = searchParams.get("payment_id");
+
   const [order, setOrder] = useState<Order | null>(null);
-  const [selectedMethod, setSelectedMethod] = useState<"wave" | "orange-money">("wave");
+  const [payment, setPayment] = useState<Payment | null>(null);
+  const [selectedMethod, setSelectedMethod] = useState<"wave" | "orange-money">(
+    "wave",
+  );
   const [isProcessing, setIsProcessing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load order from localStorage or mock
+  // Load order and payment data
   useEffect(() => {
-    const loadOrder = async () => {
-      if (!orderId) {
-        toast.error("Order ID missing");
-        window.location.href = "/";
+    const loadData = async () => {
+      if (!orderId || !paymentId) {
+        toast.error("Paramètres manquants");
+        navigate("/");
         return;
       }
 
-      // Try to load from localStorage
-      const stored = localStorage.getItem(`order-${orderId}`);
-      if (stored) {
-        setOrder(JSON.parse(stored));
-      } else {
-        // Mock order for demo
-        setOrder({
-          id: orderId,
-          orderNumber: "CM12345678",
-          customer_name: "Demo Customer",
-          customer_phone: "77 123 45 67",
-          items: [
-            { product_name: "Menu Classique", quantity: 1, price: 4500 },
-          ],
-          total: 5500,
-          order_type: "livraison",
-        });
+      try {
+        // Load order
+        const { data: orderData, error: orderError } =
+          await orders.get(orderId);
+        if (orderError || !orderData) {
+          toast.error("Commande non trouvée");
+          navigate("/");
+          return;
+        }
+        setOrder(orderData as any);
+
+        // Load payment
+        const { data: paymentData, error: paymentError } =
+          await payments.get(paymentId);
+        if (paymentError || !paymentData) {
+          toast.error("Enregistrement de paiement non trouvé");
+          navigate("/");
+          return;
+        }
+        setPayment(paymentData as any);
+        setSelectedMethod((paymentData as any).payment_method || "wave");
+      } catch (error) {
+        console.error("Error loading data:", error);
+        toast.error("Erreur lors du chargement des données");
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
 
-    loadOrder();
-  }, [orderId]);
+    loadData();
+  }, [orderId, paymentId, navigate]);
 
   const handlePayment = async () => {
-    if (!order) {
-      toast.error("Commande non trouvée");
+    if (!order || !payment) {
+      toast.error("Données manquantes");
       return;
     }
 
     setIsProcessing(true);
 
     try {
-      // Simulate PayDunya API call
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Update payment method if changed
+      if (selectedMethod !== payment.payment_method) {
+        const { data: updated } = await payments.update(payment.id, {
+          payment_method: selectedMethod,
+        });
+        if (updated) {
+          setPayment(updated as any);
+        }
+      }
 
-      // In production, this would call: /api/paydunya/initialize
-      // For demo, we'll simulate success
-      const paymentUrl = `https://paydunya.com/pay/${order.id}`;
-      const simulateSuccess = true;
+      // Prepare payload for PayDunya initialization
+      const paymentInitPayload = {
+        order_id: order.id,
+        payment_id: payment.id,
+        total: order.total,
+        payment_method: selectedMethod,
+        order_number: order.order_number,
+        items: order.items,
+        customer_name: order.customer_name,
+        customer_phone: order.customer_phone,
+        order_type: order.order_type,
+      };
 
-      if (simulateSuccess) {
-        // Update order status to confirmed
-        const updatedOrder = {
-          ...order,
-          status: "confirmed",
-        };
-        localStorage.setItem(`order-${order.id}`, JSON.stringify(updatedOrder));
+      // Call PayDunya initialize endpoint
+      const { data: paymentResult, error: paymentError } =
+        await paydunya.initialize(paymentInitPayload);
 
-        // Redirect to success page
-        window.location.href = `/payment-success?order_id=${order.id}`;
+      if (paymentError || !paymentResult) {
+        const errorMsg =
+          paymentError?.message ||
+          "Erreur lors de l'initialisation du paiement";
+        toast.error(`❌ ${errorMsg}`);
+        setIsProcessing(false);
+        return;
+      }
+
+      // Show success message
+      toast.success("✅ Redirection vers PayDunya...");
+
+      // Wait a moment then redirect to PayDunya
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      const paymentUrl = (paymentResult as any).payment_url;
+      if (paymentUrl) {
+        // Redirect to PayDunya payment page
+        window.location.href = paymentUrl;
       } else {
-        throw new Error("Payment initialization failed");
+        toast.error("❌ URL de paiement non reçue");
+        setIsProcessing(false);
       }
     } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Une erreur s'est produite";
       console.error("Payment error:", error);
-      toast.error("Erreur lors du paiement. Veuillez réessayer.");
+      toast.error(`❌ Erreur: ${message}`);
       setIsProcessing(false);
     }
   };
@@ -113,16 +170,19 @@ export default function Payment() {
     );
   }
 
-  if (!order) {
+  if (!order || !payment) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-foreground mb-2">
             Commande non trouvée
           </h1>
-          <a href="/" className="text-primary font-semibold">
+          <Button
+            onClick={() => navigate("/")}
+            className="mt-4 bg-primary text-white"
+          >
             Retour à l'accueil
-          </a>
+          </Button>
         </div>
       </div>
     );
@@ -131,17 +191,39 @@ export default function Payment() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm py-6">
+      <header className="bg-white shadow-sm py-6 border-b border-border">
         <div className="max-w-2xl mx-auto px-4 text-center">
           <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-3">
             <span className="text-2xl">🍗</span>
           </div>
-          <h1 className="text-xl font-black text-chicken-navy">CHICKEN MASTER</h1>
-          <p className="text-sm text-muted-foreground">Finalisation du paiement</p>
+          <h1 className="text-xl font-black text-chicken-navy">
+            CHICKEN MASTER
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Finalisation du paiement
+          </p>
         </div>
       </header>
 
       <div className="max-w-2xl mx-auto px-4 py-8">
+        {/* Menu Image */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white rounded-2xl shadow-lg p-6 mb-6"
+        >
+          <h2 className="text-2xl font-bold text-foreground mb-4">
+            Notre Menu
+          </h2>
+          <div className="rounded-lg overflow-hidden shadow-md">
+            <img
+              src="https://cdn.builder.io/api/v1/image/assets%2F19945f87741e40b398843fe8ba0a7879%2F6218ca500fe641c38096229d876951bc?format=webp&width=800"
+              alt="Menu Chicken Master"
+              className="w-full h-auto"
+            />
+          </div>
+        </motion.div>
+
         {/* Order Summary */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -155,7 +237,9 @@ export default function Payment() {
           <div className="space-y-3 mb-6 pb-6 border-b border-border">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Commande N°</span>
-              <span className="font-bold">{order.orderNumber}</span>
+              <span className="font-bold text-red-600">
+                {order.order_number}
+              </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Client</span>
@@ -164,7 +248,9 @@ export default function Payment() {
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Type</span>
               <span className="font-semibold">
-                {order.order_type === "livraison" ? "🚚 Livraison" : "📦 À emporter"}
+                {order.order_type === "livraison"
+                  ? "🚚 Livraison"
+                  : "📦 À emporter"}
               </span>
             </div>
           </div>
@@ -172,15 +258,43 @@ export default function Payment() {
           {/* Items */}
           <div className="space-y-2 mb-6 pb-6 border-b border-border">
             {order.items.map((item, idx) => (
-              <div key={idx} className="flex justify-between text-sm">
-                <span className="text-muted-foreground">
-                  {item.quantity}x {item.product_name}
-                </span>
-                <span className="font-semibold">
-                  {(item.price * item.quantity).toLocaleString()} F
-                </span>
+              <div key={idx} className="text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">
+                    {item.quantity}x {item.product_name}
+                  </span>
+                  <span className="font-semibold">
+                    {(item.price * item.quantity).toLocaleString()} F
+                  </span>
+                </div>
+                {item.selected_drink && (
+                  <div className="text-xs text-muted-foreground ml-4 mt-0.5">
+                    (Boisson: {item.selected_drink})
+                  </div>
+                )}
               </div>
             ))}
+          </div>
+
+          {/* Totals */}
+          <div className="space-y-2 mb-6 pb-6 border-b-2 border-gray-900">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Sous-total</span>
+              <span className="font-semibold">
+                {order.items
+                  .reduce((sum, item) => sum + item.price * item.quantity, 0)
+                  .toLocaleString()}{" "}
+                F
+              </span>
+            </div>
+            {order.order_type === "livraison" && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">
+                  Frais de livraison
+                </span>
+                <span className="font-semibold">1.000 F</span>
+              </div>
+            )}
           </div>
 
           {/* Total */}
@@ -199,29 +313,28 @@ export default function Payment() {
           transition={{ delay: 0.1 }}
           className="bg-white rounded-2xl shadow-lg p-6 mb-6"
         >
-          <h2 className="text-2xl font-bold text-foreground mb-4">
-            Méthode de paiement
+          <h2 className="text-lg font-bold text-foreground mb-4">
+            Choisissez votre méthode de paiement
           </h2>
 
-          <RadioGroup value={selectedMethod} onValueChange={(v) => setSelectedMethod(v as any)}>
+          <RadioGroup
+            value={selectedMethod}
+            onValueChange={(v) => setSelectedMethod(v as any)}
+          >
             <div className="space-y-4">
               {/* Wave */}
               <Label
                 htmlFor="wave"
-                className="flex items-center p-4 border-2 rounded-2xl cursor-pointer transition-all hover:border-primary"
+                className="flex items-center p-4 border-2 rounded-2xl cursor-pointer transition-all hover:border-blue-500"
                 style={{
                   borderColor:
-                    selectedMethod === "wave"
-                      ? "hsl(var(--primary))"
-                      : "hsl(var(--border))",
+                    selectedMethod === "wave" ? "#3B82F6" : "#E5E7EB",
                   backgroundColor:
-                    selectedMethod === "wave"
-                      ? "hsl(var(--primary) / 0.05)"
-                      : "transparent",
+                    selectedMethod === "wave" ? "#EFF6FF" : "transparent",
                 }}
               >
-                <div className="w-16 h-12 bg-white rounded-lg border border-blue-200 flex items-center justify-center mr-4 flex-shrink-0">
-                  <span className="text-xs font-bold text-blue-600">Wave</span>
+                <div className="w-16 h-12 bg-white rounded-lg border border-blue-200 flex items-center justify-center mr-4 flex-shrink-0 text-xl">
+                  🌊
                 </div>
                 <div className="flex-1">
                   <p className="font-bold text-lg text-foreground">Wave</p>
@@ -235,28 +348,32 @@ export default function Payment() {
               {/* Orange Money */}
               <Label
                 htmlFor="orange-money"
-                className="flex items-center p-4 border-2 rounded-2xl cursor-pointer transition-all hover:border-primary"
+                className="flex items-center p-4 border-2 rounded-2xl cursor-pointer transition-all hover:border-orange-500"
                 style={{
                   borderColor:
-                    selectedMethod === "orange-money"
-                      ? "hsl(var(--primary))"
-                      : "hsl(var(--border))",
+                    selectedMethod === "orange-money" ? "#EA580C" : "#E5E7EB",
                   backgroundColor:
                     selectedMethod === "orange-money"
-                      ? "hsl(var(--primary) / 0.05)"
+                      ? "#FFF7ED"
                       : "transparent",
                 }}
               >
-                <div className="w-16 h-12 bg-white rounded-lg border border-orange-200 flex items-center justify-center mr-4 flex-shrink-0">
-                  <span className="text-xs font-bold text-orange-600">Orange</span>
+                <div className="w-16 h-12 bg-white rounded-lg border border-orange-200 flex items-center justify-center mr-4 flex-shrink-0 text-xl">
+                  🍊
                 </div>
                 <div className="flex-1">
-                  <p className="font-bold text-lg text-foreground">Orange Money</p>
+                  <p className="font-bold text-lg text-foreground">
+                    Orange Money
+                  </p>
                   <p className="text-sm text-muted-foreground">
                     Paiement mobile rapide
                   </p>
                 </div>
-                <RadioGroupItem value="orange-money" id="orange-money" className="ml-4" />
+                <RadioGroupItem
+                  value="orange-money"
+                  id="orange-money"
+                  className="ml-4"
+                />
               </Label>
             </div>
           </RadioGroup>
@@ -267,13 +384,15 @@ export default function Payment() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-6 flex items-start gap-3"
+          className="bg-green-50 border border-green-200 rounded-3xl p-4 mb-6 flex items-start gap-3"
         >
-          <Lock className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+          <Shield className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="font-semibold text-blue-900">🔒 Paiement sécurisé</p>
-            <p className="text-sm text-blue-700 mt-1">
-              Vos données sont protégées par PayDunya
+            <p className="font-semibold text-green-900">
+              🛡️ Paiement 100% sécurisé par PayDunya
+            </p>
+            <p className="text-sm text-green-700 mt-1">
+              Vos données bancaires sont protégées et cryptées
             </p>
           </div>
         </motion.div>
@@ -287,7 +406,7 @@ export default function Payment() {
           <Button
             onClick={handlePayment}
             disabled={isProcessing}
-            className="w-full h-16 bg-primary hover:bg-primary/90 text-white font-bold text-lg flex items-center justify-center gap-2"
+            className="w-full h-16 bg-green-500 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-lg flex items-center justify-center gap-2 rounded-xl transition-all"
           >
             {isProcessing ? (
               <>

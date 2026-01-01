@@ -1,8 +1,13 @@
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Trash2, Plus, Minus } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 interface CartItem {
   id: string;
@@ -31,8 +36,39 @@ export default function CartDrawer({
   onRemoveItem,
   onCheckout,
 }: CartDrawerProps) {
-  const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const navigate = useNavigate();
+  const total = items.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0,
+  );
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
+
+  const handleCheckout = () => {
+    // Generate order ID
+    const orderId = `order-${Date.now()}`;
+
+    // Store order in localStorage
+    const order = {
+      id: orderId,
+      orderNumber: `CM${Math.random().toString().slice(2, 10)}`,
+      customer_name: "Client",
+      customer_phone: "",
+      items: items.map((item) => ({
+        product_name: item.product_name,
+        quantity: item.quantity,
+        price: item.price,
+      })),
+      total,
+      order_type: "livraison" as const,
+      status: "pending",
+    };
+
+    localStorage.setItem(`order-${orderId}`, JSON.stringify(order));
+
+    // Navigate to payment page
+    navigate(`/payment?order_id=${orderId}`);
+    onOpenChange(false);
+  };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -46,7 +82,9 @@ export default function CartDrawer({
         {items.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
             <div className="text-6xl mb-4">🛒</div>
-            <h3 className="text-lg font-bold text-foreground mb-2">Votre panier est vide</h3>
+            <h3 className="text-lg font-bold text-foreground mb-2">
+              Votre panier est vide
+            </h3>
             <p className="text-center text-muted-foreground text-sm mb-6">
               Ajoutez des produits pour commencer votre commande
             </p>
@@ -97,7 +135,7 @@ export default function CartDrawer({
                           onClick={() =>
                             onUpdateQuantity(
                               item.id,
-                              item.quantity === 1 ? 0 : item.quantity - 1
+                              item.quantity === 1 ? 0 : item.quantity - 1,
                             )
                           }
                           className="p-1 hover:bg-gray-200 transition-colors rounded"
@@ -108,7 +146,9 @@ export default function CartDrawer({
                           {item.quantity}
                         </span>
                         <button
-                          onClick={() => onUpdateQuantity(item.id, item.quantity + 1)}
+                          onClick={() =>
+                            onUpdateQuantity(item.id, item.quantity + 1)
+                          }
                           className="p-1 hover:bg-gray-200 transition-colors rounded"
                         >
                           <Plus className="w-4 h-4 text-gray-600" />
@@ -141,17 +181,16 @@ export default function CartDrawer({
 
               <div className="pt-4 border-t border-border">
                 <div className="flex items-center justify-between mb-4">
-                  <span className="text-lg font-bold text-foreground">Total</span>
+                  <span className="text-lg font-bold text-foreground">
+                    Total
+                  </span>
                   <span className="text-2xl font-bold text-primary">
                     {total.toLocaleString()} F
                   </span>
                 </div>
 
                 <Button
-                  onClick={() => {
-                    onCheckout();
-                    onOpenChange(false);
-                  }}
+                  onClick={handleCheckout}
                   className="w-full bg-primary text-white hover:bg-primary/90 h-12 font-semibold text-base"
                 >
                   Valider la commande

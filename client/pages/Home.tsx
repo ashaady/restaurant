@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Truck, Package, ShoppingCart, Gift, TrendingUp } from "lucide-react";
+import { Truck, Package, ShoppingCart, TrendingUp } from "lucide-react";
 import { motion } from "framer-motion";
 import Layout from "@/components/Layout";
 import CartDrawer from "@/components/CartDrawer";
@@ -37,7 +37,8 @@ const mockProducts: Product[] = [
     name: "Menu Classique",
     description: "4 pièces de poulet croustillant + frites + boisson",
     price: 4500,
-    image_url: "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?w=500&h=500&fit=crop",
+    image_url:
+      "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?w=500&h=500&fit=crop",
     category: "menus",
     is_featured: true,
     is_top_product: true,
@@ -47,7 +48,8 @@ const mockProducts: Product[] = [
     name: "Chicken Burger Master",
     description: "Burger signature avec poulet croustillant et sauce maison",
     price: 3500,
-    image_url: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500&h=500&fit=crop",
+    image_url:
+      "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500&h=500&fit=crop",
     category: "burgers",
     is_featured: true,
     is_top_product: true,
@@ -57,7 +59,8 @@ const mockProducts: Product[] = [
     name: "Menu Solo",
     description: "2 pièces de poulet + petite frite + boisson",
     price: 2500,
-    image_url: "https://images.unsplash.com/photo-1598103442097-8b74394b95c6?w=500&h=500&fit=crop",
+    image_url:
+      "https://images.unsplash.com/photo-1598103442097-8b74394b95c6?w=500&h=500&fit=crop",
     category: "menus",
     is_featured: false,
     is_top_product: true,
@@ -67,7 +70,8 @@ const mockProducts: Product[] = [
     name: "Tacos Poulet",
     description: "Tacos garni de poulet croustillant et fromage",
     price: 2500,
-    image_url: "https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?w=500&h=500&fit=crop",
+    image_url:
+      "https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?w=500&h=500&fit=crop",
     category: "tacos",
     is_featured: true,
     is_top_product: false,
@@ -77,7 +81,8 @@ const mockProducts: Product[] = [
     name: "Frites Sauce",
     description: "Frites accompagnées de 3 sauces au choix",
     price: 1500,
-    image_url: "https://images.unsplash.com/photo-1630431341973-02e1bb7a6408?w=500&h=500&fit=crop",
+    image_url:
+      "https://images.unsplash.com/photo-1630431341973-02e1bb7a6408?w=500&h=500&fit=crop",
     category: "snacks",
     is_featured: true,
     is_top_product: false,
@@ -146,9 +151,7 @@ export default function Home() {
       handleRemoveItem(itemId);
     } else {
       setCartItems((prev) =>
-        prev.map((item) =>
-          item.id === itemId ? { ...item, quantity } : item
-        )
+        prev.map((item) => (item.id === itemId ? { ...item, quantity } : item)),
       );
     }
   };
@@ -168,17 +171,13 @@ export default function Home() {
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="relative aspect-video md:aspect-square rounded-2xl overflow-hidden shadow-2xl"
+              className="relative aspect-square flex items-center justify-center"
             >
               <img
-                src="https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=600&h=600&fit=crop"
-                alt="Chicken Master"
-                className="w-full h-full object-cover"
+                src="https://cdn.builder.io/api/v1/image/assets%2F19945f87741e40b398843fe8ba0a7879%2F3f1cb2a0ca1d436485c1cbe9e643728c?format=webp&width=800"
+                alt="Chicken Master Logo"
+                className="w-full h-full object-contain"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-6xl md:text-8xl">🍗</div>
-              </div>
             </motion.div>
 
             {/* Right: Content Section */}
@@ -203,34 +202,37 @@ export default function Home() {
                 <Link to="/menu" className="group">
                   <button className="w-full h-24 md:h-32 bg-primary hover:bg-primary/90 rounded-xl md:rounded-2xl flex flex-col items-center justify-center gap-2 transition-all duration-300 hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl">
                     <Truck className="w-6 h-6 md:w-8 md:h-8 text-white" />
-                    <span className="font-bold text-sm md:text-base text-white">Livraison</span>
+                    <span className="font-bold text-sm md:text-base text-white">
+                      Livraison
+                    </span>
                   </button>
                 </Link>
 
                 <Link to="/menu" className="group">
                   <button className="w-full h-24 md:h-32 bg-chicken-green hover:bg-chicken-green/90 rounded-xl md:rounded-2xl flex flex-col items-center justify-center gap-2 transition-all duration-300 hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl">
                     <Package className="w-6 h-6 md:w-8 md:h-8 text-white" />
-                    <span className="font-bold text-sm md:text-base text-white">À emporter</span>
+                    <span className="font-bold text-sm md:text-base text-white">
+                      À emporter
+                    </span>
                   </button>
                 </Link>
 
-                <Link to="/menu" className="group">
+                <Link to="/menu" className="group col-span-2 md:col-span-1">
                   <button className="w-full h-24 md:h-32 bg-primary hover:bg-primary/90 rounded-xl md:rounded-2xl flex flex-col items-center justify-center gap-2 transition-all duration-300 hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl">
                     <ShoppingCart className="w-6 h-6 md:w-8 md:h-8 text-white" />
-                    <span className="font-bold text-sm md:text-base text-white">Menu</span>
+                    <span className="font-bold text-sm md:text-base text-white">
+                      Menu
+                    </span>
                   </button>
                 </Link>
-
-                <button className="w-full h-24 md:h-32 bg-purple-500 hover:bg-purple-600 rounded-xl md:rounded-2xl flex flex-col items-center justify-center gap-2 transition-all duration-300 hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl">
-                  <Gift className="w-6 h-6 md:w-8 md:h-8 text-white" />
-                  <span className="font-bold text-sm md:text-base text-white">Fidélité</span>
-                </button>
               </div>
 
               {/* Status Indicator */}
               <div className="flex items-center gap-3 bg-white/10 px-4 py-3 rounded-lg w-fit">
                 <div className="w-2 h-2 bg-chicken-green rounded-full animate-pulse" />
-                <span className="text-sm md:text-base font-medium">La commande est ouverte</span>
+                <span className="text-sm md:text-base font-medium">
+                  La commande est ouverte
+                </span>
               </div>
             </motion.div>
           </div>
@@ -267,7 +269,9 @@ export default function Home() {
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
                       <div>
                         <p className="text-2xl mb-1">{cat.emoji}</p>
-                        <h3 className="text-white font-bold text-lg">{cat.name}</h3>
+                        <h3 className="text-white font-bold text-lg">
+                          {cat.name}
+                        </h3>
                       </div>
                     </div>
                   </div>
@@ -320,7 +324,11 @@ export default function Home() {
                 <div className="bg-primary hover:bg-primary/90 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 h-full flex items-center justify-center p-6 text-center cursor-pointer hover:scale-105">
                   <div>
                     <TrendingUp className="w-12 h-12 text-white mx-auto mb-3" />
-                    <p className="text-white font-bold">Voir toute<br />la carte</p>
+                    <p className="text-white font-bold">
+                      Voir toute
+                      <br />
+                      la carte
+                    </p>
                   </div>
                 </div>
               </Link>
