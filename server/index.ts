@@ -7,6 +7,15 @@ import {
   handlePaydunya_Callback,
   handlePaydunya_Status,
 } from "./routes/paydunya";
+import {
+  handleCreateOrder,
+  handleGetOrder,
+  handleUpdateOrder,
+  handleCreatePayment,
+  handleGetPayment,
+  handleUpdatePayment,
+  handleGetPaymentByOrderId,
+} from "./routes/orders";
 
 export function createServer() {
   const app = express();
