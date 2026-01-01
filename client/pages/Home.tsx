@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Truck, Package, ShoppingCart, Gift, TrendingUp } from "lucide-react";
+import { Truck, Package, ShoppingCart, TrendingUp } from "lucide-react";
 import { motion } from "framer-motion";
 import Layout from "@/components/Layout";
 import CartDrawer from "@/components/CartDrawer";
