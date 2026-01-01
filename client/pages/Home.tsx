@@ -168,17 +168,13 @@ export default function Home() {
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="relative aspect-video md:aspect-square rounded-2xl overflow-hidden shadow-2xl"
+              className="relative aspect-square flex items-center justify-center"
             >
               <img
-                src="https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=600&h=600&fit=crop"
-                alt="Chicken Master"
-                className="w-full h-full object-cover"
+                src="https://cdn.builder.io/api/v1/image/assets%2F19945f87741e40b398843fe8ba0a7879%2F3f1cb2a0ca1d436485c1cbe9e643728c?format=webp&width=800"
+                alt="Chicken Master Logo"
+                className="w-full h-full object-contain"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-6xl md:text-8xl">🍗</div>
-              </div>
             </motion.div>
 
             {/* Right: Content Section */}
