@@ -10,6 +10,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import PaymentMethodSelector from "@/components/PaymentMethodSelector";
 import { toast } from "sonner";
+import { orders, payments } from "@/lib/api";
 
 interface CartItem {
   id: string;
